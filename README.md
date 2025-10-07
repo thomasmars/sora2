@@ -14,6 +14,7 @@ Optional environment variables:
 - `OPENAI_API_BASE_URL` – override the API base (default `https://api.openai.com/v1`).
 - `OPENAI_BETA_HEADER` – set if OpenAI requires a beta header (value from the docs).
 - `SORA_DEFAULT_MODEL` – default model used by the CLI `create` command (defaults to `sora-2`).
+- `SORA_DEFAULT_SIZE` – default video size used when one is not provided (defaults to `1280x720`).
 - `SORA_DOWNLOAD_DIR` – directory used when no download path is provided (defaults to `<project>/downloads`).
 
 ## Commands
@@ -63,6 +64,7 @@ const run = async () => {
   try {
     const video = await createVideo({
       model: 'sora-2',
+      size: '1280x720',
       prompt: 'A serene sunrise over rolling hills in spring',
     });
     console.log('Created video:', video);

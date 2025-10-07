@@ -9,11 +9,13 @@ import {
   downloadVideo,
   downloadVideoBuffer,
   downloadVideoContent,
+  DEFAULT_VIDEO_SIZE,
   OpenAIRequestError,
   APIError,
 } from './src/videos.js';
 
 const DEFAULT_MODEL = process.env.SORA_DEFAULT_MODEL || 'sora-2';
+const DEFAULT_SIZE = process.env.SORA_DEFAULT_SIZE || DEFAULT_VIDEO_SIZE;
 const EXAMPLE_PROMPT = 'A cinematic slow-motion shot of glowing jellyfish floating through a neon coral reef.'; // Tweak this prompt to experiment.
 const DEFAULT_DOWNLOAD_DIR = process.env.SORA_DOWNLOAD_DIR || path.join(process.cwd(), 'downloads');
 
@@ -33,6 +35,7 @@ async function handleCreate(args) {
   const payload = {
     model: DEFAULT_MODEL,
     prompt,
+    size: DEFAULT_SIZE,
   };
 
   console.log('Submitting create video request with payload:');
@@ -144,6 +147,7 @@ export {
   downloadVideo,
   downloadVideoBuffer,
   downloadVideoContent,
+  DEFAULT_VIDEO_SIZE,
   OpenAIRequestError,
   APIError,
 };

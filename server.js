@@ -9,6 +9,7 @@ import {
   getVideo,
   deleteVideo,
   downloadVideoContent,
+  DEFAULT_VIDEO_SIZE,
   OpenAIRequestError,
   APIError,
 } from './src/videos.js';
@@ -38,7 +39,7 @@ app.get('/api/videos', async (req, res, next) => {
 
 app.post('/api/videos', async (req, res, next) => {
   try {
-    const { prompt, model, ...rest } = req.body ?? {};
+    const { prompt, model, size, ...rest } = req.body ?? {};
 
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required.' });
@@ -46,6 +47,7 @@ app.post('/api/videos', async (req, res, next) => {
 
     const payload = {
       prompt,
+      size: size || process.env.SORA_DEFAULT_SIZE || DEFAULT_VIDEO_SIZE,
       ...rest,
     };
 
@@ -53,6 +55,10 @@ app.post('/api/videos', async (req, res, next) => {
       payload.model = model;
     } else {
       payload.model = process.env.SORA_DEFAULT_MODEL || 'sora-2';
+    }
+
+    if (!payload.size) {
+      payload.size = DEFAULT_VIDEO_SIZE;
     }
 
     const response = await createVideo(payload);

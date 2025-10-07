@@ -30,6 +30,7 @@ const client = new OpenAI(clientOptions);
 const videos = client.videos;
 const { APIError } = OpenAI;
 const OpenAIRequestError = APIError;
+const DEFAULT_VIDEO_SIZE = process.env.SORA_DEFAULT_SIZE || '1280x720';
 
 function buildOptions(options = {}) {
   const requestOptions = {};
@@ -50,7 +51,13 @@ async function createVideo(payload, options = {}) {
     throw new TypeError('createVideo expects a payload object.');
   }
 
-  return videos.create(payload, buildOptions(options));
+  const body = { ...payload };
+
+  if (!body.size) {
+    body.size = DEFAULT_VIDEO_SIZE;
+  }
+
+  return videos.create(body, buildOptions(options));
 }
 
 async function listVideos(query = {}, options = {}) {
@@ -167,6 +174,7 @@ export {
   downloadVideo,
   downloadVideoBuffer,
   downloadVideoContent,
+  DEFAULT_VIDEO_SIZE,
   OpenAIRequestError,
   APIError,
 };

@@ -6,6 +6,7 @@ const details = document.querySelector('#details');
 const envIndicator = document.querySelector('#env-indicator');
 
 const DEFAULT_MODEL = 'sora-2';
+const DEFAULT_SIZE = '1280x720';
 
 function showJson(element, payload) {
   if (!element) return;
@@ -87,7 +88,23 @@ function renderVideos(videos = []) {
     const row = document.createElement('tr');
 
     const idCell = document.createElement('td');
-    idCell.textContent = video.id || 'unknown';
+    idCell.className = 'video-id';
+
+    const fullId = video.id || 'unknown';
+    const truncatedId = fullId.length > 5 ? `…${fullId.slice(-5)}` : fullId;
+
+    const idButton = document.createElement('button');
+    idButton.type = 'button';
+    idButton.className = 'id-toggle';
+    idButton.textContent = truncatedId;
+    idButton.dataset.state = 'short';
+    idButton.addEventListener('click', () => {
+      const showingShort = idButton.dataset.state === 'short';
+      idButton.textContent = showingShort ? fullId : truncatedId;
+      idButton.dataset.state = showingShort ? 'full' : 'short';
+    });
+
+    idCell.appendChild(idButton);
     row.appendChild(idCell);
 
     const statusCell = document.createElement('td');
@@ -147,15 +164,26 @@ function renderVideos(videos = []) {
 }
 
 async function refreshVideos() {
+  refreshBtn.disabled = true;
+  const originalText = refreshBtn.textContent;
+  refreshBtn.textContent = 'Refreshing…';
+
   try {
     const response = await apiRequest('/api/videos');
     const videos = Array.isArray(response)
       ? response
       : response?.data || response?.items || response?.results || [];
     renderVideos(videos);
+    refreshBtn.textContent = 'Updated ✔';
   } catch (error) {
     renderVideos([]);
     showJson(details, { error: error.payload || error.message });
+    refreshBtn.textContent = 'Failed ✖';
+  } finally {
+    setTimeout(() => {
+      refreshBtn.textContent = originalText;
+      refreshBtn.disabled = false;
+    }, 1500);
   }
 }
 
@@ -180,6 +208,10 @@ createForm.addEventListener('submit', async (event) => {
 
   if (!payload.model) {
     payload.model = DEFAULT_MODEL;
+  }
+
+  if (!payload.size) {
+    payload.size = DEFAULT_SIZE;
   }
 
   try {

@@ -25,6 +25,15 @@
             <input name="model" type="text" placeholder="sora-2" />
           </label>
           <label>
+            Size
+            <select name="size">
+              <option value="1280x720" selected>1280×720 (Landscape 16:9)</option>
+              <option value="1920x820">1920×820 (Ultrawide 21:9)</option>
+              <option value="1024x1024">1024×1024 (Square)</option>
+              <option value="720x1280">720×1280 (Vertical 9:16)</option>
+            </select>
+          </label>
+          <label>
             Duration (optional)
             <input name="duration" type="number" min="1" step="1" placeholder="10" />
           </label>
