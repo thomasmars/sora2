@@ -1,10 +1,18 @@
 {
   "name": "sora2",
   "version": "1.0.0",
-  "description": "",
+  "description": "Simple OpenAI Sora2 video API client",
+  "type": "module",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
+    "serve": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "private": true
+  "private": true,
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "express": "*",
+    "openai": "^6.2.0"
+  }
 }

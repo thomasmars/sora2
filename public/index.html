@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sora2 Control Panel</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Sora2 Video Control Panel</h1>
+      <p class="subtitle">Create, inspect, download, and delete Sora videos using your OpenAI credentials.</p>
+    </header>
+
+    <main>
+      <section class="panel">
+        <h2>Create Video</h2>
+        <form id="create-form" autocomplete="off">
+          <label>
+            Prompt
+            <textarea name="prompt" rows="4" placeholder="Describe the video you want to generate" required></textarea>
+          </label>
+          <label>
+            Model (optional)
+            <input name="model" type="text" placeholder="sora-2" />
+          </label>
+          <label>
+            Duration (optional)
+            <input name="duration" type="number" min="1" step="1" placeholder="10" />
+          </label>
+          <button type="submit">Create Video</button>
+        </form>
+        <pre id="create-result" class="result" hidden></pre>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Videos</h2>
+          <div class="panel-actions">
+            <button id="refresh-btn">Refresh</button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table id="videos-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Status</th>
+                <th>Model</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <pre id="details" class="result" hidden></pre>
+      </section>
+    </main>
+
+    <footer>
+      <small>Environment: <code id="env-indicator">loading…</code></small>
+    </footer>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>
