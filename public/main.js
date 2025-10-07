@@ -5,7 +5,6 @@ const videosTableBody = document.querySelector('#videos-table tbody');
 const details = document.querySelector('#details');
 const envIndicator = document.querySelector('#env-indicator');
 
-const DEFAULT_MODEL = 'sora-2';
 const DEFAULT_SIZE = '1280x720';
 
 function showJson(element, payload) {
@@ -190,35 +189,45 @@ async function refreshVideos() {
 createForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const formData = new FormData(createForm);
-  const payload = {};
+  const promptValue = `${formData.get('prompt') ?? ''}`.trim();
 
-  formData.forEach((value, key) => {
-    if (value === '') return;
-    if (key === 'duration') {
-      payload[key] = Number(value);
-      return;
-    }
-    payload[key] = value;
-  });
-
-  if (!payload.prompt) {
+  if (!promptValue) {
     alert('Prompt is required.');
     return;
   }
 
-  if (!payload.model) {
-    payload.model = DEFAULT_MODEL;
+  formData.set('prompt', promptValue);
+
+  const modelValue = `${formData.get('model') ?? ''}`.trim();
+  if (modelValue) {
+    formData.set('model', modelValue);
+  } else {
+    formData.delete('model');
   }
 
-  if (!payload.size) {
-    payload.size = DEFAULT_SIZE;
+  const sizeValue = `${formData.get('size') ?? ''}`.trim();
+  if (sizeValue) {
+    formData.set('size', sizeValue);
+  } else {
+    formData.set('size', DEFAULT_SIZE);
+  }
+
+  const secondsValue = `${formData.get('seconds') ?? ''}`.trim();
+  if (secondsValue) {
+    formData.set('seconds', secondsValue);
+  } else {
+    formData.delete('seconds');
+  }
+
+  const referenceFile = formData.get('input_reference');
+  if (referenceFile instanceof File && referenceFile.size === 0) {
+    formData.delete('input_reference');
   }
 
   try {
     const result = await apiRequest('/api/videos', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: formData,
     });
     showJson(createResult, result);
     await refreshVideos();

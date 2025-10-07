@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import imageSize from 'image-size';
+import sharp from 'sharp';
 import OpenAI from 'openai';
 
 dotenv.config();
@@ -31,6 +33,29 @@ const videos = client.videos;
 const { APIError } = OpenAI;
 const OpenAIRequestError = APIError;
 const DEFAULT_VIDEO_SIZE = process.env.SORA_DEFAULT_SIZE || '1280x720';
+const MODEL_SIZE_RULES = {
+  'sora-2': [
+    { label: '1280x720', width: 1280, height: 720 },
+    { label: '720x1280', width: 720, height: 1280 },
+  ],
+  'sora-2-pro': [
+    { label: '1280x720', width: 1280, height: 720 },
+    { label: '720x1280', width: 720, height: 1280 },
+    { label: '1024x1792', width: 1024, height: 1792 },
+    { label: '1792x1024', width: 1792, height: 1024 },
+  ],
+};
+const DEFAULT_SIZE_RULES = MODEL_SIZE_RULES['sora-2'];
+
+function getSizeRules(model) {
+  return MODEL_SIZE_RULES[model] || DEFAULT_SIZE_RULES;
+}
+const SUPPORTED_INPUT_REFERENCE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'video/mp4',
+]);
 
 function buildOptions(options = {}) {
   const requestOptions = {};
@@ -52,9 +77,25 @@ async function createVideo(payload, options = {}) {
   }
 
   const body = { ...payload };
+  const model = body.model || 'sora-2';
+  const sizeRules = getSizeRules(model);
+  let referenceMeta;
 
-  if (!body.size) {
-    body.size = DEFAULT_VIDEO_SIZE;
+  if (body.input_reference_path) {
+    referenceMeta = await createInputReferenceFromPath(body.input_reference_path, sizeRules);
+    body.input_reference = referenceMeta.file;
+    delete body.input_reference_path;
+  } else if (body.input_reference && body.input_reference.file) {
+    referenceMeta = body.input_reference;
+    body.input_reference = referenceMeta.file;
+  }
+
+  if (referenceMeta?.sizeLabel) {
+    body.size = referenceMeta.sizeLabel;
+  } else if (body.size) {
+    body.size = coerceSizeToSupported(body.size, sizeRules) || sizeRules[0]?.label || DEFAULT_VIDEO_SIZE;
+  } else {
+    body.size = sizeRules[0]?.label || DEFAULT_VIDEO_SIZE;
   }
 
   return videos.create(body, buildOptions(options));
@@ -166,6 +207,187 @@ async function downloadVideoContent(videoId, options = {}) {
   return fetchVideoContent(videoId, options);
 }
 
+async function createInputReferenceFromPath(filePath, sizeRules = DEFAULT_SIZE_RULES) {
+  if (!filePath) {
+    return undefined;
+  }
+
+  const absolutePath = path.resolve(filePath);
+  const data = await fs.readFile(absolutePath);
+  const filename = path.basename(absolutePath);
+  return buildInputReference(data, filename, undefined, sizeRules);
+}
+
+async function createInputReferenceFromBuffer(buffer, filename = 'input-reference.bin', mimeType, sizeRules = DEFAULT_SIZE_RULES) {
+  if (!buffer) {
+    return undefined;
+  }
+
+  const resolvedName = filename || 'input-reference.bin';
+  return buildInputReference(buffer, resolvedName, mimeType, sizeRules);
+}
+
+async function buildInputReference(data, filename, explicitMimeType, sizeRules = DEFAULT_SIZE_RULES) {
+  const inferredMime = inferMimeType(filename, explicitMimeType);
+  const mimeType = ensureSupportedMimeType(inferredMime, filename);
+  const alignment = await alignBufferToSupportedSize(data, mimeType, sizeRules);
+  const file = await OpenAI.toFile(alignment.buffer, filename, { type: mimeType });
+  return { file, mimeType, sizeLabel: alignment.sizeLabel };
+}
+
+async function alignBufferToSupportedSize(buffer, mimeType, sizeRules = DEFAULT_SIZE_RULES) {
+  if (!isImageMimeType(mimeType) || !sizeRules || !sizeRules.length) {
+    return { buffer, sizeLabel: undefined };
+  }
+
+  const baseDimensions = getImageDimensions(buffer);
+  if (!baseDimensions) {
+    return { buffer, sizeLabel: undefined };
+  }
+
+  const targetSize = chooseSupportedVideoSize(baseDimensions.width, baseDimensions.height, sizeRules);
+  if (!targetSize) {
+    return { buffer, sizeLabel: undefined };
+  }
+
+  if (targetSize.width === baseDimensions.width && targetSize.height === baseDimensions.height) {
+    return { buffer, sizeLabel: targetSize.label };
+  }
+
+  const format = mimeTypeToSharpFormat(mimeType);
+  let pipeline = sharp(buffer).resize(targetSize.width, targetSize.height, { fit: 'cover' });
+  if (format) {
+    pipeline = pipeline.toFormat(format);
+  }
+  const resized = await pipeline.toBuffer();
+  return { buffer: resized, sizeLabel: targetSize.label };
+}
+
+function getImageDimensions(buffer) {
+  try {
+    const { width, height } = imageSize(buffer);
+    if (width && height) {
+      return { width, height };
+    }
+  } catch (_error) {
+    // Ignore and fall back to default handling
+  }
+  return undefined;
+}
+
+function chooseSupportedVideoSize(width, height, sizeRules = DEFAULT_SIZE_RULES) {
+  if (!width || !height || !sizeRules || !sizeRules.length) {
+    return undefined;
+  }
+
+  const isLandscape = width >= height;
+  const ratio = width / height;
+  const candidates = sizeRules.filter((size) => (size.width >= size.height) === isLandscape);
+  const pool = candidates.length ? candidates : sizeRules;
+
+  let best = pool[0];
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  for (const size of pool) {
+    const sizeRatio = size.width / size.height;
+    const diff = Math.abs(sizeRatio - ratio);
+    if (diff < bestScore) {
+      best = size;
+      bestScore = diff;
+    }
+  }
+
+  return best;
+}
+
+function coerceSizeToSupported(size, sizeRules = DEFAULT_SIZE_RULES) {
+  if (!sizeRules || !sizeRules.length || !size) {
+    return size;
+  }
+
+  const normalized = normalizeSizeLabel(size);
+  const directMatch = sizeRules.find((rule) => rule.label === normalized);
+  if (directMatch) {
+    return directMatch.label;
+  }
+
+  const match = normalized.match(/^(\d+)x(\d+)$/);
+  if (match) {
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+      const candidate = chooseSupportedVideoSize(width, height, sizeRules);
+      if (candidate) {
+        return candidate.label;
+      }
+    }
+  }
+
+  return sizeRules[0]?.label;
+}
+
+function normalizeSizeLabel(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^0-9x]/g, '')
+    .replace(/x+/, 'x');
+}
+
+function mimeTypeToSharpFormat(mimeType) {
+  switch (mimeType) {
+    case 'image/jpeg':
+      return 'jpeg';
+    case 'image/png':
+      return 'png';
+    case 'image/webp':
+      return 'webp';
+    default:
+      return undefined;
+  }
+}
+
+function isImageMimeType(mimeType) {
+  return typeof mimeType === 'string' && mimeType.startsWith('image/');
+}
+
+function inferMimeType(filename, fallbackMimeType) {
+  if (fallbackMimeType && typeof fallbackMimeType === 'string' && fallbackMimeType.trim()) {
+    const normalized = fallbackMimeType.trim().toLowerCase();
+    if (SUPPORTED_INPUT_REFERENCE_MIME_TYPES.has(normalized)) {
+      return normalized;
+    }
+  }
+
+  const ext = path.extname(filename || '').toLowerCase();
+  switch (ext) {
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.png':
+      return 'image/png';
+    case '.webp':
+      return 'image/webp';
+    case '.mp4':
+      return 'video/mp4';
+    default:
+      return fallbackMimeType || undefined;
+  }
+}
+
+function ensureSupportedMimeType(mimeType, filename) {
+  const normalized = (mimeType || '').trim().toLowerCase();
+  if (!SUPPORTED_INPUT_REFERENCE_MIME_TYPES.has(normalized)) {
+    const supported = Array.from(SUPPORTED_INPUT_REFERENCE_MIME_TYPES).join(', ');
+    throw new Error(
+      `Unsupported input_reference file type${
+        filename ? ` for "${filename}"` : ''
+      }. Supported types: ${supported}.`
+    );
+  }
+  return normalized;
+}
+
 export {
   createVideo,
   listVideos,
@@ -174,7 +396,13 @@ export {
   downloadVideo,
   downloadVideoBuffer,
   downloadVideoContent,
+  createInputReferenceFromPath,
+  createInputReferenceFromBuffer,
   DEFAULT_VIDEO_SIZE,
+  MODEL_SIZE_RULES,
+  getSizeRules,
+  coerceSizeToSupported,
+  SUPPORTED_INPUT_REFERENCE_MIME_TYPES,
   OpenAIRequestError,
   APIError,
 };

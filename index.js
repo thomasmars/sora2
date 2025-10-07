@@ -9,20 +9,27 @@ import {
   downloadVideo,
   downloadVideoBuffer,
   downloadVideoContent,
+  createInputReferenceFromPath,
+  createInputReferenceFromBuffer,
   DEFAULT_VIDEO_SIZE,
+  MODEL_SIZE_RULES,
+  getSizeRules,
+  coerceSizeToSupported,
+  SUPPORTED_INPUT_REFERENCE_MIME_TYPES,
   OpenAIRequestError,
   APIError,
 } from './src/videos.js';
 
 const DEFAULT_MODEL = process.env.SORA_DEFAULT_MODEL || 'sora-2';
 const DEFAULT_SIZE = process.env.SORA_DEFAULT_SIZE || DEFAULT_VIDEO_SIZE;
+const ENV_INPUT_REFERENCE = process.env.SORA_INPUT_REFERENCE;
 const EXAMPLE_PROMPT = 'A cinematic slow-motion shot of glowing jellyfish floating through a neon coral reef.'; // Tweak this prompt to experiment.
 const DEFAULT_DOWNLOAD_DIR = process.env.SORA_DOWNLOAD_DIR || path.join(process.cwd(), 'downloads');
 
 function printUsage() {
   console.log(`Usage: node index.js <command> [options]\n\n` +
     `Commands:\n` +
-    `  create [prompt...]        Create a new video using the provided prompt (or the example prompt).\n` +
+    `  create [prompt...] [--file <path>]  Create a new video (optionally guiding with a media file).\n` +
     `  status <videoId>          Fetch the status/details for a specific video.\n` +
     `  list                      List all videos.\n` +
     `  download <videoId> [file] Download a finished video to the downloads directory (or a provided path).\n` +
@@ -31,12 +38,43 @@ function printUsage() {
 }
 
 async function handleCreate(args) {
-  const prompt = args.length ? args.join(' ') : EXAMPLE_PROMPT;
+  let inputReferencePath = ENV_INPUT_REFERENCE;
+  const promptTokens = [];
+
+  for (let i = 0; i < args.length; i += 1) {
+    const token = args[i];
+    if (token.startsWith('--file=')) {
+      inputReferencePath = token.slice('--file='.length);
+      continue;
+    }
+
+    if (token === '--file' && i + 1 < args.length) {
+      inputReferencePath = args[i + 1];
+      i += 1;
+      continue;
+    }
+
+    promptTokens.push(token);
+  }
+
+  let prompt = promptTokens.length ? promptTokens.join(' ') : EXAMPLE_PROMPT;
+  prompt = prompt.trim();
+  if (!prompt) {
+    prompt = EXAMPLE_PROMPT;
+  }
+
+  if (inputReferencePath) {
+    inputReferencePath = inputReferencePath.trim();
+  }
   const payload = {
     model: DEFAULT_MODEL,
     prompt,
     size: DEFAULT_SIZE,
   };
+
+  if (inputReferencePath) {
+    payload.input_reference_path = inputReferencePath;
+  }
 
   console.log('Submitting create video request with payload:');
   console.log(JSON.stringify(payload, null, 2));
@@ -147,7 +185,13 @@ export {
   downloadVideo,
   downloadVideoBuffer,
   downloadVideoContent,
+  createInputReferenceFromPath,
+  createInputReferenceFromBuffer,
   DEFAULT_VIDEO_SIZE,
+  MODEL_SIZE_RULES,
+  getSizeRules,
+  coerceSizeToSupported,
+  SUPPORTED_INPUT_REFERENCE_MIME_TYPES,
   OpenAIRequestError,
   APIError,
 };

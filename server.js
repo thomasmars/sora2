@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
 import express from 'express';
+import multer from 'multer';
 
 import {
   createVideo,
@@ -9,7 +10,11 @@ import {
   getVideo,
   deleteVideo,
   downloadVideoContent,
+  createInputReferenceFromBuffer,
+  getSizeRules,
+  coerceSizeToSupported,
   DEFAULT_VIDEO_SIZE,
+  SUPPORTED_INPUT_REFERENCE_MIME_TYPES,
   OpenAIRequestError,
   APIError,
 } from './src/videos.js';
@@ -17,6 +22,7 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const upload = multer({ storage: multer.memoryStorage() });
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -37,28 +43,72 @@ app.get('/api/videos', async (req, res, next) => {
   }
 });
 
-app.post('/api/videos', async (req, res, next) => {
+app.post('/api/videos', upload.single('input_reference'), async (req, res, next) => {
   try {
     const { prompt, model, size, ...rest } = req.body ?? {};
 
-    if (!prompt) {
+    const promptText = typeof prompt === 'string' ? prompt.trim() : '';
+
+    if (!promptText) {
       return res.status(400).json({ error: 'Prompt is required.' });
     }
 
+    const sizeValue = typeof size === 'string' ? size.trim() : size;
+
     const payload = {
-      prompt,
-      size: size || process.env.SORA_DEFAULT_SIZE || DEFAULT_VIDEO_SIZE,
+      prompt: promptText,
+      size: sizeValue || process.env.SORA_DEFAULT_SIZE || DEFAULT_VIDEO_SIZE,
       ...rest,
     };
 
-    if (model) {
-      payload.model = model;
+    if (payload.seconds !== undefined) {
+      const parsedSeconds = Number(payload.seconds);
+      if (Number.isFinite(parsedSeconds) && parsedSeconds > 0) {
+        payload.seconds = String(parsedSeconds);
+      } else {
+        delete payload.seconds;
+      }
+    }
+
+    const modelValue = typeof model === 'string' ? model.trim() : model;
+
+    if (modelValue) {
+      payload.model = modelValue;
     } else {
       payload.model = process.env.SORA_DEFAULT_MODEL || 'sora-2';
     }
 
-    if (!payload.size) {
-      payload.size = DEFAULT_VIDEO_SIZE;
+    const sizeRules = getSizeRules(payload.model);
+    payload.size = coerceSizeToSupported(payload.size, sizeRules) || sizeRules[0]?.label || DEFAULT_VIDEO_SIZE;
+
+    if (req.file && req.file.buffer && req.file.buffer.length) {
+      const filename = req.file.originalname || req.file.fieldname || 'input-reference.bin';
+      const providedType = normalizeMimeType(req.file.mimetype);
+
+      if (
+        providedType &&
+        !SUPPORTED_INPUT_REFERENCE_MIME_TYPES.has(providedType)
+      ) {
+        return res.status(400).json({
+          error: `Unsupported input_reference type "${providedType}". Supported types: ${Array.from(
+            SUPPORTED_INPUT_REFERENCE_MIME_TYPES
+          ).join(', ')}`,
+        });
+      }
+
+      try {
+        payload.input_reference = await createInputReferenceFromBuffer(
+          req.file.buffer,
+          filename,
+          providedType,
+          sizeRules
+        );
+        if (payload.input_reference?.sizeLabel) {
+          payload.size = payload.input_reference.sizeLabel;
+        }
+      } catch (error) {
+        return res.status(400).json({ error: error.message || 'Failed to process input reference.' });
+      }
     }
 
     const response = await createVideo(payload);
@@ -134,3 +184,14 @@ app.use((error, _req, res, _next) => {
 app.listen(PORT, () => {
   console.log(`Sora2 control panel available at http://localhost:${PORT}`);
 });
+
+function normalizeMimeType(value) {
+  if (!value || typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed || trimmed === 'application/octet-stream') {
+    return undefined;
+  }
+  return trimmed;
+}

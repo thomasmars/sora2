@@ -15,7 +15,7 @@
     <main>
       <section class="panel">
         <h2>Create Video</h2>
-        <form id="create-form" autocomplete="off">
+        <form id="create-form" autocomplete="off" enctype="multipart/form-data">
           <label>
             Prompt
             <textarea name="prompt" rows="4" placeholder="Describe the video you want to generate" required></textarea>
@@ -28,14 +28,20 @@
             Size
             <select name="size">
               <option value="1280x720" selected>1280×720 (Landscape 16:9)</option>
-              <option value="1920x820">1920×820 (Ultrawide 21:9)</option>
-              <option value="1024x1024">1024×1024 (Square)</option>
+              <option value="1792x1024">1792×1024 (Cinematic)</option>
+              <option value="1024x1792">1024×1792 (Vertical Tall)</option>
               <option value="720x1280">720×1280 (Vertical 9:16)</option>
             </select>
+            <small class="hint">Advanced sizes require the `sora-2-pro` model.</small>
           </label>
           <label>
-            Duration (optional)
-            <input name="duration" type="number" min="1" step="1" placeholder="10" />
+            Seconds (optional)
+            <input name="seconds" type="number" min="1" max="12" step="1" placeholder="4" />
+          </label>
+          <label>
+            Reference Media (optional)
+            <input name="input_reference" type="file" accept="image/*,video/*" />
+            <small class="hint">Supported: JPEG, PNG, WEBP images or MP4 video.</small>
           </label>
           <button type="submit">Create Video</button>
         </form>

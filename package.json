@@ -13,6 +13,9 @@
   "dependencies": {
     "dotenv": "^17.2.3",
     "express": "*",
+    "multer": "*",
+    "image-size": "^1.0.2",
+    "sharp": "^0.33.3",
     "openai": "^6.2.0"
   }
 }
