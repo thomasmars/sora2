@@ -203,6 +203,35 @@ tr:last-child td {
   letter-spacing: 0.05em;
 }
 
+/* Progress bar */
+.progress {
+  --track: rgba(148, 163, 184, 0.25);
+  --fill: var(--accent);
+  position: relative;
+  height: 8px;
+  background: var(--track);
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 120px;
+}
+
+.progress > .bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: linear-gradient(90deg, var(--fill), rgba(56, 189, 248, 0.6));
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+.progress-label {
+  margin-left: 0.5rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 footer {
   margin-top: auto;
   text-align: center;
@@ -214,6 +243,13 @@ code {
   background: rgba(15, 23, 42, 0.6);
   padding: 0.15rem 0.35rem;
   border-radius: 6px;
+}
+
+/* Stack panels up to larger widths for more breathing room */
+@media (max-width: 1400px) {
+  main {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {

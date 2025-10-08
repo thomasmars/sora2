@@ -6,6 +6,8 @@ const details = document.querySelector('#details');
 const envIndicator = document.querySelector('#env-indicator');
 
 const DEFAULT_SIZE = '1280x720';
+let isRefreshing = false;
+let autoRefreshTimer = null;
 
 function showJson(element, payload) {
   if (!element) return;
@@ -57,6 +59,46 @@ function resolveStatus(video) {
 
 function resolveModel(video) {
   return video?.model || video?.metadata?.model || '–';
+}
+
+function resolveProgress(video) {
+  const candidates = [
+    video?.progress,
+    video?.processing?.progress,
+    video?.metadata?.progress,
+    video?.progress_percent,
+    video?.progressPercent,
+  ];
+
+  let value;
+  for (const c of candidates) {
+    if (c === undefined || c === null || c === '') continue;
+    value = c;
+    break;
+  }
+
+  if (value === undefined) return undefined;
+
+  // Normalize variants: "72%", "0.72", 0.72, 72
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d+(?:\.\d+)?%$/.test(trimmed)) {
+      value = parseFloat(trimmed.replace('%', ''));
+    } else if (/^\d*(?:\.\d+)?$/.test(trimmed)) {
+      value = parseFloat(trimmed);
+    }
+  }
+
+  if (typeof value === 'number' && isFinite(value)) {
+    // If looks like 0..1, convert to percent
+    if (value <= 1) value = value * 100;
+    // Clamp
+    value = Math.max(0, Math.min(100, value));
+    // Round to 1 decimal if needed
+    return Math.round(value * 10) / 10;
+  }
+
+  return undefined;
 }
 
 function resolveCreated(video) {
@@ -127,6 +169,32 @@ function renderVideos(videos = []) {
     statusCell.appendChild(statusPill);
     row.appendChild(statusCell);
 
+    const progressCell = document.createElement('td');
+    const progress = resolveProgress(video);
+    if (typeof progress === 'number') {
+      const wrapper = document.createElement('div');
+      wrapper.style.display = 'flex';
+      wrapper.style.alignItems = 'center';
+
+      const track = document.createElement('div');
+      track.className = 'progress';
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      bar.style.width = `${progress}%`;
+      track.appendChild(bar);
+
+      const label = document.createElement('span');
+      label.className = 'progress-label';
+      label.textContent = `${progress}%`;
+
+      wrapper.appendChild(track);
+      wrapper.appendChild(label);
+      progressCell.appendChild(wrapper);
+    } else {
+      progressCell.textContent = '–';
+    }
+    row.appendChild(progressCell);
+
     const modelCell = document.createElement('td');
     modelCell.textContent = resolveModel(video);
     row.appendChild(modelCell);
@@ -177,6 +245,8 @@ function renderVideos(videos = []) {
 }
 
 async function refreshVideos() {
+  if (isRefreshing) return;
+  isRefreshing = true;
   refreshBtn.disabled = true;
   const originalText = refreshBtn.textContent;
   refreshBtn.textContent = 'Refreshing…';
@@ -197,6 +267,7 @@ async function refreshVideos() {
       refreshBtn.textContent = originalText;
       refreshBtn.disabled = false;
     }, 1500);
+    isRefreshing = false;
   }
 }
 
@@ -261,6 +332,12 @@ async function init() {
   }
 
   await refreshVideos();
+  // Auto-refresh every 20 seconds
+  if (!autoRefreshTimer) {
+    autoRefreshTimer = setInterval(() => {
+      refreshVideos();
+    }, 20000);
+  }
 }
 
 init();
