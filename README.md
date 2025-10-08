@@ -1,13 +1,12 @@
-# Sora2 Video API Helpers
+# SORA Test App
 
-Utility functions and lightweight commands for working with OpenAI's Sora2 video endpoints via the official `openai` Node SDK. Load your API key from a `.env` file, edit the sample prompt, and run the provided commands to create and manage videos.
+This app is for testing our SORA video generation integration. It provides a simple web UI (and an optional CLI) to create, monitor, and download videos via the official `openai` Node SDK.
 
 ## Setup
 
 1. Copy `.env.example` to `.env` and set `OPENAI_API_KEY`.
-2. Remove any existing `node_modules` folder and `package-lock.json` to ensure a clean install.
-3. Install dependencies: `npm install`.
-4. Use Node.js 18+ so that the global `fetch` API is available (needed by the OpenAI SDK).
+2. Install dependencies: `npm install`.
+3. Start the server: `npm run serve` then open `http://localhost:3000`.
 
 Optional environment variables:
 
@@ -23,7 +22,7 @@ Supported `size` values: `1280x720`, `1792x1024`, `1024x1792`, `720x1280` (tall/
 Supported `input_reference` formats: `image/jpeg`, `image/png`, `image/webp`, `video/mp4`.
 Image guides are automatically cropped/resized to the closest supported resolution.
 
-## Commands
+## CLI (optional)
 
 The project exposes a small CLI backed by the OpenAI client. Update the `EXAMPLE_PROMPT` constant in `index.js` to try new prompts, or provide a prompt inline when running the command.
 
@@ -65,62 +64,3 @@ npm run serve
 # Supported types: JPEG, PNG, WEBP images or MP4 video.
 # If you upload an image, the requested size automatically matches the image dimensions.
 ```
-
-## Using the helpers in code
-
-```js
-import {
-  createVideo,
-  listVideos,
-  getVideo,
-  deleteVideo,
-  downloadVideo,
-  createInputReferenceFromPath,
-  APIError,
-} from './index.js';
-
-const run = async () => {
-  try {
-    const video = await createVideo({
-      model: 'sora-2',
-      size: '1280x720',
-      input_reference: await createInputReferenceFromPath('./guide.png'),
-      prompt: 'A serene sunrise over rolling hills in spring',
-    });
-    console.log('Created video:', video);
-
-    const status = await getVideo(video.id);
-    console.log('Video status:', status);
-
-    await downloadVideo(video.id, `downloads/${video.id}.mp4`);
-    console.log('Downloaded video file.');
-  } catch (error) {
-    if (error instanceof APIError) {
-      console.error('OpenAI API error:', error.status, error.message);
-    } else {
-      console.error('Unexpected error:', error);
-    }
-  }
-};
-
-run();
-```
-
-Each helper accepts an optional `signal` in the options object if you need abort control.
-
-## Functions
-
-- `createVideo(payload, options?)` – Calls `openai.videos.create` with your generation payload.
-- `listVideos(options?)` – Calls `openai.videos.list`.
-- `getVideo(videoId, options?)` – Calls `openai.videos.retrieve` for status/details.
-- `deleteVideo(videoId, options?)` – Calls `openai.videos.delete`.
-- `downloadVideo(videoId, destination, options?)` – Fetches `openai.videos.downloadContent` and saves the file locally.
-- `createInputReferenceFromPath(filePath, sizeRules?)` – Loads a local file and returns an uploadable reference aligned to supported sizes.
-- `createInputReferenceFromBuffer(buffer, filename?, mimeType?, sizeRules?)` – Wraps a buffer so it can be passed as `input_reference` while enforcing size/mime rules.
-- `DEFAULT_VIDEO_SIZE` – Shared default size (`1280x720`).
-- `MODEL_SIZE_RULES` – Map describing allowed output resolutions per model.
-- `getSizeRules(model)` – Helper to fetch the allowed sizes for a given model.
-- `coerceSizeToSupported(size, sizeRules?)` – Snaps an arbitrary size to the closest supported resolution.
-- `SUPPORTED_INPUT_REFERENCE_MIME_TYPES` – Set of allowed MIME types for guide media.
-
-Errors from the OpenAI client propagate as `APIError` (also exported as `OpenAIRequestError` for compatibility).
