@@ -60,13 +60,27 @@ function resolveModel(video) {
 }
 
 function resolveCreated(video) {
-  const ts = video?.created_at || video?.created || video?.createdAt;
-  if (!ts) return '–';
+  const ts = video?.created_at ?? video?.created ?? video?.createdAt;
+  if (ts === undefined || ts === null || ts === '') return '–';
+
   try {
-    return new Date(ts).toLocaleString();
+    // Handle numeric epoch seconds vs. milliseconds and numeric strings
+    if (typeof ts === 'number' || (typeof ts === 'string' && /^\d+$/.test(ts))) {
+      let n = Number(ts);
+      if (Number.isFinite(n)) {
+        if (n < 1e12) n *= 1000; // likely seconds → ms
+        const d = new Date(n);
+        if (!isNaN(d.getTime())) return d.toLocaleString();
+      }
+    }
+
+    const d = new Date(ts);
+    if (!isNaN(d.getTime())) return d.toLocaleString();
   } catch (_error) {
-    return ts;
+    // fall through
   }
+
+  return String(ts);
 }
 
 function renderVideos(videos = []) {
